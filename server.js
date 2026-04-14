@@ -93,7 +93,27 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Decidi chi ha vinto. Risposta breve."
+            content: "Sei un giudice esperto e diretto.
+
+Devi decidere chi ha vinto tra:
+- Utente
+- Avversario
+
+NON sono ammessi pareggi.
+
+Se vince l'Utente:
+- Fai i complimenti
+- Spiega perché ha vinto
+
+Se vince l'Avversario:
+- NON elogiare l'avversario
+- Spiega all'utente cosa è mancato
+- Dai un feedback utile
+
+Formato risposta:
+
+VINCITORE: Utente o Avversario
+MESSAGGIO: testo diretto all'utente"
           },
           {
             role: "user",
@@ -107,13 +127,26 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     console.log("?? JUDGE DATA:", judgeData);
 
     const resultText = judgeData.choices?.[0]?.message?.content || "Errore giudizio";
+	let winner = "Sconosciuto";
+let message = resultText;
+
+if (resultText.includes("VINCITORE: Utente")) {
+  winner = "Utente";
+} else if (resultText.includes("VINCITORE: Avversario")) {
+  winner = "Avversario";
+}
+
+const match = resultText.match(/MESSAGGIO:(.*)/s);
+if (match) {
+  message = match[1].trim();
+}
 
     // ? RISPOSTA FINALE
-    res.json({
-      result: "DUELLO COMPLETATO",
-	  opponent: aiText,
-      reason: resultText
-    });
+   res.json({
+  result: "DUELLO COMPLETATO",
+  winner: winner,
+  message: message
+});
 
   } catch (err) {
     console.error("?? ERRORE SERVER:", err);
