@@ -128,13 +128,29 @@ if (matchLoser) {
     let messageForWaiting;
     let messageForNew;
 
-    if (winner === "Utente") {
-      messageForNew = message;
-      messageForWaiting = "Hai perso. " + message;
-    } else {
-      messageForWaiting = message;
-      messageForNew = "Hai perso. " + message;
+   if (winner === "Utente") {
+  results[matchId] = {
+    waiting: {
+      winner: "Avversario",
+      message: messageLoser
+    },
+    new: {
+      winner: "Utente",
+      message: messageWinner
     }
+  };
+} else {
+  results[matchId] = {
+    waiting: {
+      winner: "Utente",
+      message: messageWinner
+    },
+    new: {
+      winner: "Avversario",
+      message: messageLoser
+    }
+  };
+}
 
     results[matchId] = {
       waiting: {
