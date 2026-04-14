@@ -33,7 +33,10 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
     // ?? TRASCRIZIONE
     const form = new FormData();
-    form.append("file", fs.createReadStream(req.file.path));
+    form.append("file", fs.createReadStream(req.file.path), {
+  filename: "audio.webm",
+  contentType: "audio/webm"
+});
     form.append("model", "gpt-4o-mini-transcribe");
 
     const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
