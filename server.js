@@ -7,9 +7,11 @@ import cors from "cors";
 
 const app = express();
 
-// ?? QUESTA RIGA DEVE ESSERE QUI
 app.use(cors());
+
 const upload = multer({ dest: "uploads/" });
+
+// ? Route base (test server)
 app.get("/", (req, res) => {
   res.send("Server attivo ??");
 });
@@ -18,31 +20,33 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
-    console.log("Richiesta ricevuta");
+    console.log("?? Richiesta ricevuta");
 
-    // ? controllo fondamentale
+    // ? Controllo file
     if (!req.file) {
       console.log("? Nessun file ricevuto");
       return res.status(400).json({ error: "Audio mancante" });
     }
 
     console.log("? File ricevuto:", req.file.path);
+    console.log("?? API KEY:", OPENAI_API_KEY ? "OK" : "MANCANTE");
 
-    // ?? Trascrizione
+    // ?? TRASCRIZIONE
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path));
     form.append("model", "gpt-4o-mini-transcribe");
 
-   const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${OPENAI_API_KEY}`,
-    ...form.getHeaders()
-  },
-  body: form
-});
+    const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        ...form.getHeaders()
+      },
+      body: form
+    });
 
     const transcriptData = await transcriptRes.json();
+    console.log("?? TRANSCRIPT DATA:", transcriptData);
 
     if (!transcriptData.text) {
       return res.status(500).json({
@@ -53,7 +57,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
     const userText = transcriptData.text;
 
-    // ?? Risposta AI
+    // ?? RISPOSTA AI
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -70,9 +74,11 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const aiData = await aiRes.json();
+    console.log("?? AI DATA:", aiData);
+
     const aiText = aiData.choices?.[0]?.message?.content || "Errore AI";
 
-    // ?? Giudice
+    // ?? GIUDICE
     const judgeRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -95,15 +101,18 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const judgeData = await judgeRes.json();
+    console.log("?? JUDGE DATA:", judgeData);
+
     const resultText = judgeData.choices?.[0]?.message?.content || "Errore giudizio";
 
+    // ? RISPOSTA FINALE
     res.json({
       result: "DUELLO COMPLETATO",
       reason: resultText
     });
 
   } catch (err) {
-    console.error("ERRORE SERVER:", err);
+    console.error("?? ERRORE SERVER:", err);
 
     res.status(500).json({
       error: "Errore server",
@@ -115,5 +124,5 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("?? Server running on port", PORT);
 });
