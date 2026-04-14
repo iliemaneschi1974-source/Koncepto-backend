@@ -56,7 +56,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
     console.log("?? UTENTE:", userText);
 
-    // ?? SE NON C’È NESSUNO ? CODA
+    // ?? CODA
     if (queue.length === 0) {
       const id = Date.now().toString();
 
@@ -100,70 +100,55 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     const judgeData = await judgeRes.json();
     const resultText = judgeData.choices?.[0]?.message?.content || "";
 
-    // ?? PARSE
+    console.log("?? RISPOSTA AI:", resultText);
+
     // ?? PARSE CORRETTO
-let winner = "Sconosciuto";
-let messageWinner = "";
-let messageLoser = "";
+    let winner = "Sconosciuto";
+    let messageWinner = "";
+    let messageLoser = "";
 
-if (resultText.includes("VINCITORE: Utente")) {
-  winner = "Utente";
-} else if (resultText.includes("VINCITORE: Avversario")) {
-  winner = "Avversario";
-}
-
-// prendi messaggio vincitore
-const matchWinner = resultText.match(/MESSAGGIO_VINCITORE:(.*)/);
-if (matchWinner) {
-  messageWinner = matchWinner[1].trim();
-}
-
-// prendi messaggio perdente
-const matchLoser = resultText.match(/MESSAGGIO_PERDENTE:(.*)/);
-if (matchLoser) {
-  messageLoser = matchLoser[1].trim();
-}
-
-    // ?? CREA RISULTATI DIVERSI
-    let messageForWaiting;
-    let messageForNew;
-
-   if (winner === "Utente") {
-  results[matchId] = {
-    waiting: {
-      winner: "Avversario",
-      message: messageLoser
-    },
-    new: {
-      winner: "Utente",
-      message: messageWinner
+    if (resultText.includes("VINCITORE: Utente")) {
+      winner = "Utente";
+    } else if (resultText.includes("VINCITORE: Avversario")) {
+      winner = "Avversario";
     }
-  };
-} else {
-  results[matchId] = {
-    waiting: {
-      winner: "Utente",
-      message: messageWinner
-    },
-    new: {
-      winner: "Avversario",
-      message: messageLoser
+
+    const matchWinner = resultText.match(/MESSAGGIO_VINCITORE:\s*([\s\S]*?)MESSAGGIO_PERDENTE:/);
+    const matchLoser = resultText.match(/MESSAGGIO_PERDENTE:\s*([\s\S]*)/);
+
+    if (matchWinner) messageWinner = matchWinner[1].trim();
+    if (matchLoser) messageLoser = matchLoser[1].trim();
+
+    // fallback sicurezza
+    if (!messageWinner) messageWinner = "Hai vinto!";
+    if (!messageLoser) messageLoser = "Puoi migliorare!";
+
+    // ?? RISULTATI PERSONALIZZATI
+    if (winner === "Utente") {
+      results[matchId] = {
+        waiting: {
+          winner: "Avversario",
+          message: messageLoser
+        },
+        new: {
+          winner: "Utente",
+          message: messageWinner
+        }
+      };
+    } else {
+      results[matchId] = {
+        waiting: {
+          winner: "Utente",
+          message: messageWinner
+        },
+        new: {
+          winner: "Avversario",
+          message: messageLoser
+        }
+      };
     }
-  };
-}
 
-    results[matchId] = {
-      waiting: {
-        winner: winner === "Utente" ? "Avversario" : "Utente",
-        message: messageForWaiting
-      },
-      new: {
-        winner: winner,
-        message: messageForNew
-      }
-    };
-
-    // ? RISPOSTA PER IL SECONDO UTENTE
+    // ? RISPOSTA PER CHI ARRIVA DOPO
     res.json({
       status: "matched",
       result: "DUELLO COMPLETATO",
@@ -181,7 +166,7 @@ if (matchLoser) {
   }
 });
 
-// ?? CHECK RISULTATO
+// ?? CHECK
 app.get("/check/:id", (req, res) => {
   const id = req.params.id;
 
