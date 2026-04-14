@@ -87,7 +87,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Sei un giudice esperto e diretto. Devi decidere chi ha vinto tra Utente e Avversario. NON sono ammessi pareggi. Se vince l'Utente fai i complimenti e spiega perché ha vinto. Se vince l'Avversario NON elogiarlo ma spiega cosa è mancato all'utente e dai un feedback utile. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO: testo diretto all'utente."
+            content: "Sei un giudice esperto. Devi valutare un duello tra Utente e Avversario. NON sono ammessi pareggi. Devi generare DUE messaggi diversi. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO_VINCITORE: complimenti e perché ha vinto. MESSAGGIO_PERDENTE: feedback su cosa migliorare."
           },
           {
             role: "user",
@@ -101,19 +101,28 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     const resultText = judgeData.choices?.[0]?.message?.content || "";
 
     // ?? PARSE
-    let winner = "Sconosciuto";
-    let message = resultText;
+    // ?? PARSE CORRETTO
+let winner = "Sconosciuto";
+let messageWinner = "";
+let messageLoser = "";
 
-    if (resultText.includes("VINCITORE: Utente")) {
-      winner = "Utente";
-    } else if (resultText.includes("VINCITORE: Avversario")) {
-      winner = "Avversario";
-    }
+if (resultText.includes("VINCITORE: Utente")) {
+  winner = "Utente";
+} else if (resultText.includes("VINCITORE: Avversario")) {
+  winner = "Avversario";
+}
 
-    const match = resultText.match(/MESSAGGIO:(.*)/s);
-    if (match) {
-      message = match[1].trim();
-    }
+// prendi messaggio vincitore
+const matchWinner = resultText.match(/MESSAGGIO_VINCITORE:(.*)/);
+if (matchWinner) {
+  messageWinner = matchWinner[1].trim();
+}
+
+// prendi messaggio perdente
+const matchLoser = resultText.match(/MESSAGGIO_PERDENTE:(.*)/);
+if (matchLoser) {
+  messageLoser = matchLoser[1].trim();
+}
 
     // ?? CREA RISULTATI DIVERSI
     let messageForWaiting;
