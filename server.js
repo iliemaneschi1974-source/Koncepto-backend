@@ -6,35 +6,32 @@ import FormData from "form-data";
 import cors from "cors";
 
 const app = express();
-
 app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-// ?? MEMORIA TEMPORANEA
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// ?? MEMORIA
 let queue = [];
 let results = {};
 
-// ? Test server
+// TEST
 app.get("/", (req, res) => {
   res.send("Server attivo ??");
 });
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
 // ?? DUEL
 app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
+
     if (!req.file) {
       return res.status(400).json({ error: "Audio mancante" });
     }
 
-    // ?? Trascrizione
+    // ?? TRASCRIZIONE
     const form = new FormData();
-    form.append("file", fs.createReadStream(req.file.path), {
-      filename: "audio.wav",
-      contentType: "audio/wav"
-    });
+    form.append("file", fs.createReadStream(req.file.path));
     form.append("model", "gpt-4o-mini-transcribe");
 
     const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -47,35 +44,41 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const transcriptData = await transcriptRes.json();
+    const userText = transcriptData.text;
 
-    if (!transcriptData.text) {
+    if (!userText) {
       return res.status(500).json({ error: "Errore trascrizione" });
     }
 
-    const userText = transcriptData.text;
-
     console.log("?? UTENTE:", userText);
 
-    // ?? CODA
-    if (queue.length === 0) {
-      const id = Date.now().toString();
+    // ?? ID utente corrente
+    const userId = Date.now().toString();
 
-      queue.push({ id, text: userText });
+    // ?? SE NESSUNO IN CODA
+    if (queue.length === 0) {
+
+      queue.push({
+        id: userId,
+        text: userText,
+        timestamp: Date.now()
+      });
+
+      console.log("? In attesa:", userId);
 
       return res.json({
         status: "waiting",
-        id: id,
-        message: "? In attesa di un avversario..."
+        id: userId
       });
     }
 
     // ?? MATCH
     const opponent = queue.shift();
-    const matchId = opponent.id;
+    const opponentId = opponent.id;
 
-    console.log("?? MATCH TROVATO");
+    console.log("?? MATCH:", userId, "vs", opponentId);
 
-    // ?? GIUDICE
+    // ?? GIUDICE AI
     const judgeRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -87,7 +90,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Sei un giudice esperto. Devi valutare un duello tra Utente e Avversario. NON sono ammessi pareggi. Devi generare DUE messaggi diversi. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO_VINCITORE: complimenti e perché ha vinto. MESSAGGIO_PERDENTE: feedback su cosa migliorare."
+            content: "Sei un giudice esperto. NON sono ammessi pareggi. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO_VINCITORE: testo. MESSAGGIO_PERDENTE: testo."
           },
           {
             role: "user",
@@ -100,63 +103,56 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     const judgeData = await judgeRes.json();
     const resultText = judgeData.choices?.[0]?.message?.content || "";
 
-    console.log("?? RISPOSTA AI:", resultText);
+    console.log("?? AI:", resultText);
 
-    // ?? PARSE CORRETTO
-    let winner = "Sconosciuto";
-    let messageWinner = "";
-    let messageLoser = "";
+    // ?? PARSE
+    let winner = "Utente";
 
-    if (resultText.includes("VINCITORE: Utente")) {
-      winner = "Utente";
-    } else if (resultText.includes("VINCITORE: Avversario")) {
+    if (resultText.includes("VINCITORE: Avversario")) {
       winner = "Avversario";
     }
 
-    const matchWinner = resultText.match(/MESSAGGIO_VINCITORE:\s*([\s\S]*?)MESSAGGIO_PERDENTE:/);
-    const matchLoser = resultText.match(/MESSAGGIO_PERDENTE:\s*([\s\S]*)/);
+    const winMatch = resultText.match(/MESSAGGIO_VINCITORE:\s*([\s\S]*?)MESSAGGIO_PERDENTE:/);
+    const loseMatch = resultText.match(/MESSAGGIO_PERDENTE:\s*([\s\S]*)/);
 
-    if (matchWinner) messageWinner = matchWinner[1].trim();
-    if (matchLoser) messageLoser = matchLoser[1].trim();
+    let messageWinner = winMatch ? winMatch[1].trim() : "Hai vinto!";
+    let messageLoser = loseMatch ? loseMatch[1].trim() : "Puoi migliorare!";
 
-    // fallback sicurezza
-    if (!messageWinner) messageWinner = "Hai vinto!";
-    if (!messageLoser) messageLoser = "Puoi migliorare!";
-
-    // ?? RISULTATI PERSONALIZZATI
+    // ?? SALVATAGGIO RISULTATI (FIX VERO)
     if (winner === "Utente") {
-      results[matchId] = {
-        waiting: {
-          winner: "Avversario",
-          message: messageLoser
-        },
-        new: {
-          winner: "Utente",
-          message: messageWinner
-        }
+
+      results[userId] = {
+        winner: "Utente",
+        message: messageWinner
       };
+
+      results[opponentId] = {
+        winner: "Avversario",
+        message: messageLoser
+      };
+
     } else {
-      results[matchId] = {
-        waiting: {
-          winner: "Utente",
-          message: messageWinner
-        },
-        new: {
-          winner: "Avversario",
-          message: messageLoser
-        }
+
+      results[userId] = {
+        winner: "Avversario",
+        message: messageLoser
+      };
+
+      results[opponentId] = {
+        winner: "Utente",
+        message: messageWinner
       };
     }
 
-    // ? RISPOSTA PER CHI ARRIVA DOPO
-    res.json({
+    // ? risposta immediata al nuovo utente
+    return res.json({
       status: "matched",
-      result: "DUELLO COMPLETATO",
-      winner: results[matchId].new.winner,
-      message: results[matchId].new.message
+      winner: results[userId].winner,
+      message: results[userId].message
     });
 
   } catch (err) {
+
     console.error("?? ERRORE:", err);
 
     res.status(500).json({
@@ -168,21 +164,31 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
 // ?? CHECK
 app.get("/check/:id", (req, res) => {
+
   const id = req.params.id;
 
   if (results[id]) {
+
     const result = results[id];
     delete results[id];
 
     return res.json({
       status: "matched",
-      ...result.waiting
+      winner: result.winner,
+      message: result.message
     });
   }
 
   res.json({ status: "waiting" });
 });
 
+// ?? PULIZIA CODA
+setInterval(() => {
+  const now = Date.now();
+  queue = queue.filter(u => now - u.timestamp < 30000);
+}, 5000);
+
+// START
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
