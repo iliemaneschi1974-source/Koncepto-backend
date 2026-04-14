@@ -18,6 +18,16 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
+    console.log("Richiesta ricevuta");
+
+    // ? controllo fondamentale
+    if (!req.file) {
+      console.log("? Nessun file ricevuto");
+      return res.status(400).json({ error: "Audio mancante" });
+    }
+
+    console.log("? File ricevuto:", req.file.path);
+
     // ?? Trascrizione
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path));
@@ -32,6 +42,14 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const transcriptData = await transcriptRes.json();
+
+    if (!transcriptData.text) {
+      return res.status(500).json({
+        error: "Errore trascrizione",
+        data: transcriptData
+      });
+    }
+
     const userText = transcriptData.text;
 
     // ?? Risposta AI
@@ -44,14 +62,14 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "Sei carismatico, diretto e dominante." },
+          { role: "system", content: "Sei carismatico e dominante." },
           { role: "user", content: userText }
         ]
       })
     });
 
     const aiData = await aiRes.json();
-    const aiText = aiData.choices[0].message.content;
+    const aiText = aiData.choices?.[0]?.message?.content || "Errore AI";
 
     // ?? Giudice
     const judgeRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -65,7 +83,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Sei un giudice duro e diretto. Decidi chi ha vinto."
+            content: "Decidi chi ha vinto. Risposta breve."
           },
           {
             role: "user",
@@ -76,7 +94,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const judgeData = await judgeRes.json();
-    const resultText = judgeData.choices[0].message.content;
+    const resultText = judgeData.choices?.[0]?.message?.content || "Errore giudizio";
 
     res.json({
       result: "DUELLO COMPLETATO",
@@ -84,8 +102,12 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Errore server");
+    console.error("ERRORE SERVER:", err);
+
+    res.status(500).json({
+      error: "Errore server",
+      details: err.message
+    });
   }
 });
 
