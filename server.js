@@ -10,6 +10,9 @@ const app = express();
 // ?? QUESTA RIGA DEVE ESSERE QUI
 app.use(cors());
 const upload = multer({ dest: "uploads/" });
+app.get("/", (req, res) => {
+  res.send("Server attivo ??");
+});
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
