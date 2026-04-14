@@ -11,7 +11,10 @@ app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-// ? Route base (test server)
+// ?? CODA MULTIPLAYER
+let queue = [];
+
+// ? Route base
 app.get("/", (req, res) => {
   res.send("Server attivo ??");
 });
@@ -22,21 +25,16 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
     console.log("?? Richiesta ricevuta");
 
-    // ? Controllo file
     if (!req.file) {
-      console.log("? Nessun file ricevuto");
       return res.status(400).json({ error: "Audio mancante" });
     }
-
-    console.log("? File ricevuto:", req.file.path);
-    console.log("?? API KEY:", OPENAI_API_KEY ? "OK" : "MANCANTE");
 
     // ?? TRASCRIZIONE
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path), {
-  filename: "audio.webm",
-  contentType: "audio/webm"
-});
+      filename: "audio.webm",
+      contentType: "audio/webm"
+    });
     form.append("model", "gpt-4o-mini-transcribe");
 
     const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -49,37 +47,29 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const transcriptData = await transcriptRes.json();
-    console.log("?? TRANSCRIPT DATA:", transcriptData);
 
     if (!transcriptData.text) {
-      return res.status(500).json({
-        error: "Errore trascrizione",
-        data: transcriptData
-      });
+      return res.status(500).json({ error: "Errore trascrizione" });
     }
 
     const userText = transcriptData.text;
 
-    // ?? RISPOSTA AI
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "Sei carismatico e dominante." },
-          { role: "user", content: userText }
-        ]
-      })
-    });
+    console.log("?? TESTO UTENTE:", userText);
 
-    const aiData = await aiRes.json();
-    console.log("?? AI DATA:", aiData);
+    // ?? SE NON C’È NESSUNO ? METTI IN CODA
+    if (queue.length === 0) {
+      queue.push({ text: userText });
 
-    const aiText = aiData.choices?.[0]?.message?.content || "Errore AI";
+      return res.json({
+        status: "waiting",
+        message: "? In attesa di un avversario..."
+      });
+    }
+
+    // ?? MATCH
+    const opponent = queue.shift();
+
+    console.log("?? MATCH TROVATO");
 
     // ?? GIUDICE
     const judgeRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -93,43 +83,46 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-           content: "Sei un giudice esperto e diretto. Devi decidere chi ha vinto tra Utente e Avversario. NON sono ammessi pareggi. Se vince l'Utente fai i complimenti e spiega perché ha vinto. Se vince l'Avversario NON elogiarlo ma spiega cosa è mancato all'utente e dai un feedback utile. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO: testo diretto all'utente."
+            content: "Sei un giudice esperto e diretto. Devi decidere chi ha vinto tra Utente e Avversario. NON sono ammessi pareggi. Se vince l'Utente fai i complimenti e spiega perché ha vinto. Se vince l'Avversario NON elogiarlo ma spiega cosa è mancato all'utente e dai un feedback utile. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO: testo diretto all'utente."
           },
           {
             role: "user",
-            content: `Utente: ${userText}\nAvversario: ${aiText}`
+            content: `Utente: ${userText}\nAvversario: ${opponent.text}`
           }
         ]
       })
     });
 
     const judgeData = await judgeRes.json();
-    console.log("?? JUDGE DATA:", judgeData);
+    console.log("?? JUDGE:", judgeData);
 
-    const resultText = judgeData.choices?.[0]?.message?.content || "Errore giudizio";
-	let winner = "Sconosciuto";
-let message = resultText;
+    const resultText = judgeData.choices?.[0]?.message?.content || "";
 
-if (resultText.includes("VINCITORE: Utente")) {
-  winner = "Utente";
-} else if (resultText.includes("VINCITORE: Avversario")) {
-  winner = "Avversario";
-}
+    // ?? PARSE RISULTATO
+    let winner = "Sconosciuto";
+    let message = resultText;
 
-const match = resultText.match(/MESSAGGIO:(.*)/s);
-if (match) {
-  message = match[1].trim();
-}
+    if (resultText.includes("VINCITORE: Utente")) {
+      winner = "Utente";
+    } else if (resultText.includes("VINCITORE: Avversario")) {
+      winner = "Avversario";
+    }
 
-    // ? RISPOSTA FINALE
-   res.json({
-  result: "DUELLO COMPLETATO",
-  winner: winner,
-  message: message
-});
+    const match = resultText.match(/MESSAGGIO:(.*)/s);
+    if (match) {
+      message = match[1].trim();
+    }
+
+    // ? RISPOSTA
+    res.json({
+      status: "matched",
+      result: "DUELLO COMPLETATO",
+      winner: winner,
+      message: message
+    });
 
   } catch (err) {
-    console.error("?? ERRORE SERVER:", err);
+    console.error("?? ERRORE:", err);
 
     res.status(500).json({
       error: "Errore server",
