@@ -93,27 +93,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Sei un giudice esperto e diretto.
-
-Devi decidere chi ha vinto tra:
-- Utente
-- Avversario
-
-NON sono ammessi pareggi.
-
-Se vince l'Utente:
-- Fai i complimenti
-- Spiega perché ha vinto
-
-Se vince l'Avversario:
-- NON elogiare l'avversario
-- Spiega all'utente cosa è mancato
-- Dai un feedback utile
-
-Formato risposta:
-
-VINCITORE: Utente o Avversario
-MESSAGGIO: testo diretto all'utente"
+           content: "Sei un giudice esperto e diretto. Devi decidere chi ha vinto tra Utente e Avversario. NON sono ammessi pareggi. Se vince l'Utente fai i complimenti e spiega perché ha vinto. Se vince l'Avversario NON elogiarlo ma spiega cosa è mancato all'utente e dai un feedback utile. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO: testo diretto all'utente."
           },
           {
             role: "user",
