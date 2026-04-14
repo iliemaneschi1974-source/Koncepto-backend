@@ -16,7 +16,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 let queue = [];
 let results = {};
 
-// TEST
+// TEST SERVER
 app.get("/", (req, res) => {
   res.send("Server attivo ??");
 });
@@ -25,8 +25,12 @@ app.get("/", (req, res) => {
 app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
 
+    // ?? controllo file
     if (!req.file) {
-      return res.status(400).json({ error: "Audio mancante" });
+      return res.json({
+        status: "error",
+        message: "Audio mancante"
+      });
     }
 
     // ?? TRASCRIZIONE
@@ -44,18 +48,24 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const transcriptData = await transcriptRes.json();
-    const userText = transcriptData.text;
 
+    console.log("?? TRANSCRIPT RAW:", transcriptData);
+
+    const userText = transcriptData.text?.trim();
+
+    // ?? FIX CRITICO ? NO 500
     if (!userText) {
-      return res.status(500).json({ error: "Errore trascrizione" });
+      return res.json({
+        status: "error",
+        message: "Audio non comprensibile"
+      });
     }
 
     console.log("?? UTENTE:", userText);
 
-    // ?? ID utente corrente
     const userId = Date.now().toString();
 
-    // ?? SE NESSUNO IN CODA
+    // ?? CODA (nessun avversario)
     if (queue.length === 0) {
 
       queue.push({
@@ -90,7 +100,8 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Sei un giudice esperto. NON sono ammessi pareggi. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO_VINCITORE: testo. MESSAGGIO_PERDENTE: testo."
+            content:
+              "Sei un giudice esperto. NON sono ammessi pareggi. Rispondi ESATTAMENTE così: VINCITORE: Utente o Avversario. MESSAGGIO_VINCITORE: testo. MESSAGGIO_PERDENTE: testo."
           },
           {
             role: "user",
@@ -101,24 +112,29 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const judgeData = await judgeRes.json();
+
+    console.log("?? AI RAW:", judgeData);
+
     const resultText = judgeData.choices?.[0]?.message?.content || "";
 
-    console.log("?? AI:", resultText);
+    // ?? fallback sicurezza AI
+    if (!resultText) {
+      return res.json({
+        status: "error",
+        message: "Errore AI"
+      });
+    }
 
     // ?? PARSE
-    let winner = "Utente";
-
-    if (resultText.includes("VINCITORE: Avversario")) {
-      winner = "Avversario";
-    }
+    let winner = resultText.includes("Avversario") ? "Avversario" : "Utente";
 
     const winMatch = resultText.match(/MESSAGGIO_VINCITORE:\s*([\s\S]*?)MESSAGGIO_PERDENTE:/);
     const loseMatch = resultText.match(/MESSAGGIO_PERDENTE:\s*([\s\S]*)/);
 
-    let messageWinner = winMatch ? winMatch[1].trim() : "Hai vinto!";
-    let messageLoser = loseMatch ? loseMatch[1].trim() : "Puoi migliorare!";
+    const messageWinner = winMatch?.[1]?.trim() || "Hai vinto!";
+    const messageLoser = loseMatch?.[1]?.trim() || "Puoi migliorare!";
 
-    // ?? SALVATAGGIO RISULTATI (FIX VERO)
+    // ?? SALVATAGGIO RISULTATI
     if (winner === "Utente") {
 
       results[userId] = {
@@ -144,7 +160,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
       };
     }
 
-    // ? risposta immediata al nuovo utente
+    // ? risposta immediata
     return res.json({
       status: "matched",
       winner: results[userId].winner,
@@ -153,16 +169,16 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
   } catch (err) {
 
-    console.error("?? ERRORE:", err);
+    console.error("?? ERRORE GRAVE:", err);
 
-    res.status(500).json({
-      error: "Errore server",
-      details: err.message
+    return res.json({
+      status: "error",
+      message: "Errore server interno"
     });
   }
 });
 
-// ?? CHECK
+// ?? CHECK MATCH
 app.get("/check/:id", (req, res) => {
 
   const id = req.params.id;
@@ -182,13 +198,13 @@ app.get("/check/:id", (req, res) => {
   res.json({ status: "waiting" });
 });
 
-// ?? PULIZIA CODA
+// ?? PULIZIA CODA (anti utenti morti)
 setInterval(() => {
   const now = Date.now();
   queue = queue.filter(u => now - u.timestamp < 30000);
 }, 5000);
 
-// START
+// START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
