@@ -115,18 +115,35 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
       message = match[1].trim();
     }
 
-    // ?? SALVA RISULTATO PER CHI È IN ATTESA
+    // ?? CREA RISULTATI DIVERSI
+    let messageForWaiting;
+    let messageForNew;
+
+    if (winner === "Utente") {
+      messageForNew = message;
+      messageForWaiting = "Hai perso. " + message;
+    } else {
+      messageForWaiting = message;
+      messageForNew = "Hai perso. " + message;
+    }
+
     results[matchId] = {
-      winner,
-      message
+      waiting: {
+        winner: winner === "Utente" ? "Avversario" : "Utente",
+        message: messageForWaiting
+      },
+      new: {
+        winner: winner,
+        message: messageForNew
+      }
     };
 
     // ? RISPOSTA PER IL SECONDO UTENTE
     res.json({
       status: "matched",
       result: "DUELLO COMPLETATO",
-      winner,
-      message
+      winner: results[matchId].new.winner,
+      message: results[matchId].new.message
     });
 
   } catch (err) {
@@ -149,7 +166,7 @@ app.get("/check/:id", (req, res) => {
 
     return res.json({
       status: "matched",
-      ...result
+      ...result.waiting
     });
   }
 
