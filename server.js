@@ -32,8 +32,8 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     // ?? Trascrizione
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path), {
-      filename: "audio.webm",
-      contentType: "audio/webm"
+      filename: "audio.wav",
+      contentType: "audio/wav"
     });
     form.append("model", "gpt-4o-mini-transcribe");
 
