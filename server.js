@@ -11,25 +11,25 @@ app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-// ?? CODA MULTIPLAYER
+// ?? MEMORIA TEMPORANEA
 let queue = [];
+let results = {};
 
-// ? Route base
+// ? Test server
 app.get("/", (req, res) => {
   res.send("Server attivo ??");
 });
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// ?? DUEL
 app.post("/duel", upload.single("audio"), async (req, res) => {
   try {
-    console.log("?? Richiesta ricevuta");
-
     if (!req.file) {
       return res.status(400).json({ error: "Audio mancante" });
     }
 
-    // ?? TRASCRIZIONE
+    // ?? Trascrizione
     const form = new FormData();
     form.append("file", fs.createReadStream(req.file.path), {
       filename: "audio.webm",
@@ -54,20 +54,24 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
 
     const userText = transcriptData.text;
 
-    console.log("?? TESTO UTENTE:", userText);
+    console.log("?? UTENTE:", userText);
 
-    // ?? SE NON C’È NESSUNO ? METTI IN CODA
+    // ?? SE NON C’È NESSUNO ? CODA
     if (queue.length === 0) {
-      queue.push({ text: userText });
+      const id = Date.now().toString();
+
+      queue.push({ id, text: userText });
 
       return res.json({
         status: "waiting",
+        id: id,
         message: "? In attesa di un avversario..."
       });
     }
 
     // ?? MATCH
     const opponent = queue.shift();
+    const matchId = opponent.id;
 
     console.log("?? MATCH TROVATO");
 
@@ -94,11 +98,9 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     });
 
     const judgeData = await judgeRes.json();
-    console.log("?? JUDGE:", judgeData);
-
     const resultText = judgeData.choices?.[0]?.message?.content || "";
 
-    // ?? PARSE RISULTATO
+    // ?? PARSE
     let winner = "Sconosciuto";
     let message = resultText;
 
@@ -113,12 +115,18 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
       message = match[1].trim();
     }
 
-    // ? RISPOSTA
+    // ?? SALVA RISULTATO PER CHI È IN ATTESA
+    results[matchId] = {
+      winner,
+      message
+    };
+
+    // ? RISPOSTA PER IL SECONDO UTENTE
     res.json({
       status: "matched",
       result: "DUELLO COMPLETATO",
-      winner: winner,
-      message: message
+      winner,
+      message
     });
 
   } catch (err) {
@@ -129,6 +137,23 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
       details: err.message
     });
   }
+});
+
+// ?? CHECK RISULTATO
+app.get("/check/:id", (req, res) => {
+  const id = req.params.id;
+
+  if (results[id]) {
+    const result = results[id];
+    delete results[id];
+
+    return res.json({
+      status: "matched",
+      ...result
+    });
+  }
+
+  res.json({ status: "waiting" });
 });
 
 const PORT = process.env.PORT || 3000;
