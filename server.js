@@ -33,13 +33,14 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     form.append("file", fs.createReadStream(req.file.path));
     form.append("model", "gpt-4o-mini-transcribe");
 
-    const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`
-      },
-      body: form
-    });
+   const transcriptRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${OPENAI_API_KEY}`,
+    ...form.getHeaders()
+  },
+  body: form
+});
 
     const transcriptData = await transcriptRes.json();
 
