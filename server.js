@@ -111,6 +111,7 @@ app.post("/duel", upload.single("audio"), async (req, res) => {
     // ? RISPOSTA FINALE
     res.json({
       result: "DUELLO COMPLETATO",
+	  opponent: aiText,
       reason: resultText
     });
 
