@@ -4,7 +4,10 @@ import fetch from "node-fetch";
 import fs from "fs";
 import FormData from "form-data";
 import cors from "cors";
+
 const app = express();
+
+// ?? QUESTA RIGA DEVE ESSERE QUI
 app.use(cors());
 const upload = multer({ dest: "uploads/" });
 
