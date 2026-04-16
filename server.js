@@ -188,3 +188,25 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("?? Server running on port", PORT);
 });
+app.post("/speak", express.json(), async (req, res) => {
+
+  const text = req.body.text;
+
+  const response = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy", // puoi cambiarla
+      input: text
+    })
+  });
+
+  const buffer = await response.arrayBuffer();
+
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.send(Buffer.from(buffer));
+});
