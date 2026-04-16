@@ -200,7 +200,7 @@ app.post("/speak", express.json(), async (req, res) => {
     },
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
-      voice: "alloy", // puoi cambiarla
+      voice: "nova", // puoi cambiarla
       input: text
     })
   });
